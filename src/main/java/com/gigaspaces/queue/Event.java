@@ -22,4 +22,12 @@ public class Event{
     public Op getOperation() {
         return operation;
     }
+
+    @Override
+    public String toString() {
+        return "Event{" +
+                "id=" + id +
+                ", operation=" + operation +
+                '}';
+    }
 }

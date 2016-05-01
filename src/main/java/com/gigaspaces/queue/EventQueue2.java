@@ -9,7 +9,7 @@ import java.util.List;
  *
  * @since 11.0
  */
-public class EventsQueue<T extends Event> implements BlockingQueue<T> {
+public class EventQueue2<T extends Event> implements BlockingQueue<T> {
     private final int NUMBER_OF_EVENT_TYPE = 256;
 
     private final int MAX_SIZE;
@@ -18,7 +18,7 @@ public class EventsQueue<T extends Event> implements BlockingQueue<T> {
 
     private List<T> fifoQueue = new LinkedList<>();
 
-    public EventsQueue(int size) {
+    public EventQueue2(int size) {
         MAX_SIZE = size;
 
         for (int i = 0; i < NUMBER_OF_EVENT_TYPE; i++) {
@@ -41,27 +41,67 @@ public class EventsQueue<T extends Event> implements BlockingQueue<T> {
     public synchronized void put(T t) throws InterruptedException {
         Event e = t;
 
+
+        boolean succeedCompaction = true;
         while(fifoQueue.size() >=  MAX_SIZE){
+            succeedCompaction = compactionWhenNoRoomAtQueue(t);
             System.out.println("put- i am waiting - " + Thread.currentThread().getName() + "-" + e);
             wait();
         }
         System.out.println("put - I AM FREE !!! - " + Thread.currentThread().getName() + "-" + e);
-        switch (t.getOperation()){
+        if(!succeedCompaction){
+            switch (t.getOperation()){
 
-            case CREATE:
-                handleCreate(t);
-                break;
+                case CREATE:
+                    handleCreate(t);
+                    break;
 
-            case UPDATE:
-                handleUpdate(t);
-                break;
+                case UPDATE:
+                    handleUpdate(t);
+                    break;
 
-            default:
-                handleDelete(t);
-                break;
+                default:
+                    handleDelete(t);
+                    break;
+            }
         }
         notifyAll();
+    }
 
+    private boolean compactionWhenNoRoomAtQueue(T t) {
+        Event e = t;
+        Op operation = e.getOperation();
+        byte id = e.getId();
+        List list = dataArray[id];
+        if(list.isEmpty()){
+            return false;
+        }
+        // there operations to do
+        if(operation == Op.CREATE){
+            handleCreate(t);
+            return true;
+        }
+        else if(operation == Op.UPDATE){
+            if(onlyCreateOp(list)){
+                return false;
+            }
+            else { // c-u, u, DELETE - ???
+                handleUpdate(t);
+                return true;
+            }
+        }
+        else { // delete
+            handleDelete(t);
+            return true;
+        }
+    }
+
+    private boolean onlyCreateOp(List list) {
+        return list.size() == 1 && list.get(0) == Op.CREATE;
+    }
+
+    private boolean isCreateAndUpdate(List list) {
+        return list.get(0) == Op.CREATE && list.get(1) == Op.UPDATE;
     }
 
     private void handleDelete(T t) {
